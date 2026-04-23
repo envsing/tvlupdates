@@ -1,1 +1,7 @@
 
+{
+  "name": "tvl-update-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module"
+}
