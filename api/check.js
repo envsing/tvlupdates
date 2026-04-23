@@ -129,8 +129,10 @@ export default async function handler(req, res) {
     const uniqueIds = [...new Set(universeIds)];
     const games = await getGames(uniqueIds);
 
-    // TESTE: sempre envia
-    const updatedGames = games;
+    const updatedGames = games.filter((game) => {
+      if (!game.updated) return false;
+      return hoursAgo(game.updated) <= LOOKBACK_HOURS;
+    });
 
     if (updatedGames.length > 0) {
       await sendDiscordMessage(webhook, updatedGames);
@@ -138,7 +140,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
-      mode: "test",
+      mode: "normal",
       checked: games.map((game) => ({
         name: game.name,
         rootPlaceId: game.rootPlaceId,
