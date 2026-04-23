@@ -1,7 +1,3 @@
-export const config = {
-  runtime: "nodejs"
-};
-
 const PLACE_IDS = [
   "10561456271",
   "10561483644",
@@ -22,16 +18,47 @@ function hoursAgo(dateString) {
 }
 
 async function getUniverseId(placeId) {
-  const res = await fetch(`https://apis.roblox.com/universes/v1/places/${placeId}/universe`);
+  const res = await fetch(`https://apis.roblox.com/universes/v1/places/${placeId}/universe`, {
+    method: "GET",
+    headers: {
+      "accept": "application/json"
+    }
+  });
+
+  if (!res.ok) {
+    throw new Error(`Erro ao buscar universeId do place ${placeId}: ${res.status}`);
+  }
+
   const data = await res.json();
-  return data.universeId;
+
+  if (!data || !data.universeId) {
+    throw new Error(`UniverseId não encontrado para place ${placeId}`);
+  }
+
+  return String(data.universeId);
 }
 
 async function getGames(universeIds) {
   const res = await fetch(
-    `https://games.roblox.com/v1/games?universeIds=${universeIds.join(",")}`
+    `https://games.roblox.com/v1/games?universeIds=${universeIds.join(",")}`,
+    {
+      method: "GET",
+      headers: {
+        "accept": "application/json"
+      }
+    }
   );
+
+  if (!res.ok) {
+    throw new Error(`Erro ao buscar jogos: ${res.status}`);
+  }
+
   const data = await res.json();
+
+  if (!data || !Array.isArray(data.data)) {
+    throw new Error("Resposta inválida da API de jogos");
+  }
+
   return data.data;
 }
 
@@ -40,19 +67,22 @@ async function sendDiscordMessage(webhookUrl, games) {
     title: "TVL Update Tracker",
     description: `**${game.name}** foi atualizado.`,
     url: `https://www.roblox.com/games/${game.rootPlaceId}`,
-    color: 0x000000,
+    color: 0,
     fields: [
       {
         name: "Nome do jogo",
-        value: game.name
+        value: game.name,
+        inline: false
       },
       {
         name: "Horário da atualização",
-        value: fmtDate(game.updated)
+        value: fmtDate(game.updated),
+        inline: false
       },
       {
         name: "Link do jogo",
-        value: `[Abrir jogo](https://www.roblox.com/games/${game.rootPlaceId})`
+        value: `[Abrir jogo](https://www.roblox.com/games/${game.rootPlaceId})`,
+        inline: false
       }
     ],
     footer: {
@@ -61,35 +91,64 @@ async function sendDiscordMessage(webhookUrl, games) {
     timestamp: new Date(game.updated).toISOString()
   }));
 
-  await fetch(webhookUrl, {
+  const res = await fetch(webhookUrl, {
     method: "POST",
     headers: {
       "content-type": "application/json"
     },
     body: JSON.stringify({ embeds })
   });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Erro ao enviar webhook: ${res.status} - ${text}`);
+  }
 }
 
 export default async function handler(req, res) {
   try {
     const webhook = process.env.DISCORD_WEBHOOK_URL;
 
+    if (!webhook) {
+      return res.status(500).json({
+        ok: false,
+        error: "DISCORD_WEBHOOK_URL não definida"
+      });
+    }
+
     const universeIds = await Promise.all(
       PLACE_IDS.map((id) => getUniverseId(id))
     );
 
     const uniqueIds = [...new Set(universeIds)];
-
     const games = await getGames(uniqueIds);
 
-    const updated = games.filter((g) => hoursAgo(g.updated) <= LOOKBACK_HOURS);
+    const updatedGames = games.filter((game) => {
+      if (!game.updated) return false;
+      return hoursAgo(game.updated) <= LOOKBACK_HOURS;
+    });
 
-    if (updated.length > 0) {
-      await sendDiscordMessage(webhook, updated);
+    if (updatedGames.length > 0) {
+      await sendDiscordMessage(webhook, updatedGames);
     }
 
-    return new Response(JSON.stringify({ ok: true }));
+    return res.status(200).json({
+      ok: true,
+      checked: games.map((game) => ({
+        name: game.name,
+        rootPlaceId: game.rootPlaceId,
+        updated: game.updated
+      })),
+      updatedDetected: updatedGames.map((game) => ({
+        name: game.name,
+        rootPlaceId: game.rootPlaceId,
+        updated: game.updated
+      }))
+    });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }));
+    return res.status(500).json({
+      ok: false,
+      error: e.message
+    });
   }
 }
