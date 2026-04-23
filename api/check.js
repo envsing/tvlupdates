@@ -5,6 +5,7 @@ const PLACE_IDS = [
 ];
 
 const LOOKBACK_HOURS = 26;
+const ROLE_ID = "1496952791351169185";
 
 function fmtDate(dateString) {
   return new Date(dateString).toLocaleString("pt-BR", {
@@ -97,7 +98,13 @@ async function sendDiscordMessage(webhookUrl, games) {
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ embeds })
+    body: JSON.stringify({
+      content: `<@&${ROLE_ID}>`,
+      allowed_mentions: {
+        roles: [ROLE_ID]
+      },
+      embeds
+    })
   });
 
   const text = await res.text();
@@ -122,14 +129,8 @@ export default async function handler(req, res) {
     const uniqueIds = [...new Set(universeIds)];
     const games = await getGames(uniqueIds);
 
-    // teste forçado:
+    // TESTE: sempre envia
     const updatedGames = games;
-
-    // normal seria isso:
-    // const updatedGames = games.filter((game) => {
-    //   if (!game.updated) return false;
-    //   return hoursAgo(game.updated) <= LOOKBACK_HOURS;
-    // });
 
     if (updatedGames.length > 0) {
       await sendDiscordMessage(webhook, updatedGames);
@@ -137,6 +138,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
+      mode: "test",
       checked: games.map((game) => ({
         name: game.name,
         rootPlaceId: game.rootPlaceId,
