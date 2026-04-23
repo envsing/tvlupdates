@@ -18,12 +18,14 @@ function hoursAgo(dateString) {
 }
 
 async function getUniverseId(placeId) {
-  const res = await fetch(`https://apis.roblox.com/universes/v1/places/${placeId}/universe`, {
-    method: "GET",
-    headers: {
-      "accept": "application/json"
+  const res = await fetch(
+    `https://apis.roblox.com/universes/v1/places/${placeId}/universe`,
+    {
+      headers: {
+        accept: "application/json"
+      }
     }
-  });
+  );
 
   if (!res.ok) {
     throw new Error(`Erro ao buscar universeId do place ${placeId}: ${res.status}`);
@@ -31,7 +33,7 @@ async function getUniverseId(placeId) {
 
   const data = await res.json();
 
-  if (!data || !data.universeId) {
+  if (!data?.universeId) {
     throw new Error(`UniverseId não encontrado para place ${placeId}`);
   }
 
@@ -42,9 +44,8 @@ async function getGames(universeIds) {
   const res = await fetch(
     `https://games.roblox.com/v1/games?universeIds=${universeIds.join(",")}`,
     {
-      method: "GET",
       headers: {
-        "accept": "application/json"
+        accept: "application/json"
       }
     }
   );
@@ -55,7 +56,7 @@ async function getGames(universeIds) {
 
   const data = await res.json();
 
-  if (!data || !Array.isArray(data.data)) {
+  if (!data?.data || !Array.isArray(data.data)) {
     throw new Error("Resposta inválida da API de jogos");
   }
 
@@ -94,13 +95,14 @@ async function sendDiscordMessage(webhookUrl, games) {
   const res = await fetch(webhookUrl, {
     method: "POST",
     headers: {
-      "content-type": "application/json"
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({ embeds })
   });
 
+  const text = await res.text();
+
   if (!res.ok) {
-    const text = await res.text();
     throw new Error(`Erro ao enviar webhook: ${res.status} - ${text}`);
   }
 }
@@ -116,17 +118,18 @@ export default async function handler(req, res) {
       });
     }
 
-    const universeIds = await Promise.all(
-      PLACE_IDS.map((id) => getUniverseId(id))
-    );
-
+    const universeIds = await Promise.all(PLACE_IDS.map(getUniverseId));
     const uniqueIds = [...new Set(universeIds)];
     const games = await getGames(uniqueIds);
 
+    // teste forçado:
     const updatedGames = games;
-      if (!game.updated) return false;
-      return hoursAgo(game.updated) <= LOOKBACK_HOURS;
-    });
+
+    // normal seria isso:
+    // const updatedGames = games.filter((game) => {
+    //   if (!game.updated) return false;
+    //   return hoursAgo(game.updated) <= LOOKBACK_HOURS;
+    // });
 
     if (updatedGames.length > 0) {
       await sendDiscordMessage(webhook, updatedGames);
@@ -148,7 +151,7 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({
       ok: false,
-      error: e.message
+      error: e?.message || "Erro interno"
     });
   }
 }
