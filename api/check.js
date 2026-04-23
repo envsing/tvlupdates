@@ -123,7 +123,7 @@ export default async function handler(req, res) {
     const uniqueIds = [...new Set(universeIds)];
     const games = await getGames(uniqueIds);
 
-    const updatedGames = games.filter((game) => {
+    const updatedGames = games;
       if (!game.updated) return false;
       return hoursAgo(game.updated) <= LOOKBACK_HOURS;
     });
